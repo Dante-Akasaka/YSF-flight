@@ -1,0 +1,87 @@
+diff --git a/src/core/fssimulation.cpp b/src/core/fssimulation.cpp
+index 68fe1ee..c9754d9 100644
+--- a/src/core/fssimulation.cpp
++++ b/src/core/fssimulation.cpp
+@@ -28,6 +28,7 @@
+ #include "ysbitmap.h"
+ 
+ #include "fsinstreading.h"
++#include "fstelemetry.h"
+ 
+ #include "fsrefuelandtakeoff.h"
+ 
+@@ -8867,6 +8868,17 @@ void FsSimulation::SimBlastSound(YSBOOL demoMode)
+ 
+ 		FsSoundSetVehicleName(playerPlane->Prop().GetIdentifier());
+ 
++		// Telemetry for external haptics tools (see fstelemetry.h)
++		{
++			const FsAirplaneProperty &prop=playerPlane->Prop();
++			const int stalled=(FSSTALL==prop.GetFlightState() ? 1 : 0);
++			const int warn=(FSCL_HELICOPTER!=prop.GetAircraftClass() &&
++			                YSTRUE==prop.HasStallHorn() &&
++			                prop.GetAOA()>prop.GetCriticalAOA()-YsPi/60.0 ? 1 : 0);
++			FsTelemetryWrite(prop.GetG(),prop.GetAOA(),prop.GetCriticalAOA(),stalled,warn,
++			                 prop.GetLandingGear(),prop.GetFlap(),prop.GetMach(),(YSTRUE==pause ? 1 : 0));
++		}
++
+ 		YSBOOL isInVTOLMode=YSFALSE;
+ 		if(YSTRUE==playerPlane->Prop().GetHasThrustVectoring())
+ 		{
+diff --git a/src/core/fstelemetry.h b/src/core/fstelemetry.h
+new file mode 100644
+index 0000000..1a0b0c0
+--- /dev/null
++++ b/src/core/fstelemetry.h
+@@ -0,0 +1,51 @@
++#ifndef FSTELEMETRY_IS_INCLUDED
++#define FSTELEMETRY_IS_INCLUDED
++
++// Telemetry export for external haptics tools (e.g. joystick vibration bridge).
++// Writes one short JSON line to a file ~20 times per second.
++// File: environment variable YSF_TELEMETRY, otherwise "ysf_telemetry.json" in the working directory.
++// Header-only, plain C stdio, no dependency on the rest of YSFlight.
++
++#include <stdio.h>
++#include <stdlib.h>
++#include <time.h>
++#include <string>
++
++inline void FsTelemetryWrite(
++    double g,double aoaRad,double criticalAoaRad,
++    int stalled,int stallWarning,
++    double gear,double flap,double mach,int paused)
++{
++	static clock_t lastWrite=0;
++	static std::string path;
++	if(0==path.size())
++	{
++		const char *env=getenv("YSF_TELEMETRY");
++		path=(NULL!=env && 0!=env[0] ? env : "ysf_telemetry.json");
++	}
++
++	const clock_t now=clock();
++	if(0!=lastWrite && (double)(now-lastWrite)<CLOCKS_PER_SEC/20.0)
++	{
++		return;
++	}
++	lastWrite=now;
++
++	char buf[256];
++	const int n=snprintf(buf,sizeof(buf),
++	    "{\"g\":%.3f,\"aoa\":%.4f,\"crit_aoa\":%.4f,\"stall\":%d,\"warn\":%d,"
++	    "\"gear\":%.3f,\"flap\":%.3f,\"mach\":%.3f,\"paused\":%d}\n",
++	    g,aoaRad,criticalAoaRad,stalled,stallWarning,gear,flap,mach,paused);
++
++	FILE *fp=fopen(path.c_str(),"wb");
++	if(NULL!=fp)
++	{
++		if(0<n)
++		{
++			fwrite(buf,1,(size_t)n,fp);   // one small write
++		}
++		fclose(fp);
++	}
++}
++
++#endif
