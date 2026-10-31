@@ -1,0 +1,51 @@
+name: Build YSFlight with telemetry patch
+
+# Запуск вручную: вкладка Actions -> "Build YSFlight with telemetry patch" -> Run workflow
+on:
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: windows-latest
+    steps:
+      # Файлы с Windows-окончаниями строк ломают git apply, поэтому отключаем преобразование заранее
+      - name: Disable CRLF conversion
+        run: git config --global core.autocrlf false
+
+      - name: Get patch (this repository)
+        uses: actions/checkout@v4
+        with:
+          path: patchrepo
+
+      - name: Clone YSFlight sources
+        run: |
+          git clone --depth 1 https://github.com/captainys/public.git public
+          git clone --depth 1 https://github.com/captainys/YSFLIGHT.git YSFLIGHT
+
+      - name: Apply telemetry patch
+        working-directory: YSFLIGHT
+        run: git apply --ignore-whitespace --verbose ../patchrepo/ysf_telemetry.patch
+
+      - name: Configure (MSVC, x64)
+        working-directory: YSFLIGHT
+        run: |
+          mkdir build
+          cd build
+          cmake ../src -A x64
+
+      - name: Build (Release)
+        working-directory: YSFLIGHT/build
+        run: cmake --build . --config Release --parallel
+
+      - name: List built programs
+        shell: pwsh
+        run: Get-ChildItem -Path YSFLIGHT/build -Recurse -Include ysflight*.exe | Select-Object FullName, Length
+
+      - name: Upload result
+        uses: actions/upload-artifact@v4
+        with:
+          name: ysflight-with-telemetry
+          path: |
+            YSFLIGHT/build/**/Release/ysflight*.exe
+            YSFLIGHT/build/**/Release/*.dll
+          if-no-files-found: error
