@@ -49,7 +49,9 @@ jobs:
         run: |
           $dir = "YSFLIGHT/build/main/Release"
           Write-Host "Build step outcome: ${{ steps.build.outcome }}"
-          Get-ChildItem "$dir/*" -Include *.exe,*.dll -ErrorAction SilentlyContinue | Select-Object Name, Length | Format-Table
+          Get-ChildItem "$dir/*" -Include *.exe -ErrorAction SilentlyContinue | Select-Object Name, Length | Format-Table
+          Write-Host "plugin folder:"
+          Get-ChildItem "$dir/plugin" -ErrorAction SilentlyContinue | Select-Object Name, Length | Format-Table
           if (-not (Test-Path "$dir/ysflight64_gl2.exe")) {
             Write-Host "::error::ysflight64_gl2.exe не собран. Ошибки компиляции ниже:"
             Select-String -Path YSFLIGHT/build_log.txt -Pattern "error C|error LNK|fatal error|: error " | Select-Object -First 40 | ForEach-Object { $_.Line }
@@ -63,7 +65,7 @@ jobs:
           name: ysflight-with-telemetry
           path: |
             YSFLIGHT/build/main/Release/ysflight64_gl2.exe
-            YSFLIGHT/build/main/Release/*.dll
+            YSFLIGHT/build/main/Release/plugin/*.dll
           if-no-files-found: error
 
       - name: Upload build log
