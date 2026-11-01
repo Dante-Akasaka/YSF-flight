@@ -28,10 +28,12 @@ jobs:
 
       - name: Configure (MSVC, x64)
         working-directory: YSFLIGHT
+        env:
+          CMAKE_POLICY_VERSION_MINIMUM: "3.5"
         run: |
           mkdir build
           cd build
-          cmake ../src -A x64 -DCMAKE_POLICY_VERSION_MINIMUM=3.5
+          cmake ../src -A x64 "-DCMAKE_POLICY_VERSION_MINIMUM=3.5"
 
       - name: Build (Release)
         working-directory: YSFLIGHT/build
